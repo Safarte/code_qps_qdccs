@@ -11,7 +11,7 @@ SIMULATORS = []
 try:
     from qps.mps import MPS
 
-    SIMULATORS.append(MPS)
+    # SIMULATORS.append(MPS)
 except ImportError:
     pass
 
@@ -26,7 +26,7 @@ except ImportError:
 try:
     from qps.tensor import TensorContraction
 
-    SIMULATORS.append(TensorContraction)
+    # SIMULATORS.append(TensorContraction)
 except ImportError:
     pass
 
@@ -42,9 +42,7 @@ def rotation_x(theta):
     """
     Rotation around the X axis of a qubit
     """
-    return np.cos(theta / 2) * np.eye(2) - 1j * np.sin(theta / 2) * np.array(
-        [[0, 1], [1, 0]]
-    )
+    return np.cos(theta / 2) * np.eye(2) - 1j * np.sin(theta / 2) * np.array([[0, 1], [1, 0]])
 
 
 def rotation_z(theta):
@@ -119,4 +117,5 @@ def test_strong_simulation(simulator_class: type, data):
     simulator = simulator_class(_nqbits)
     simulator.simulate_circuit(_circuit)
     for state, proba in expected_results:
+        print(state, proba)
         assert np.isclose(simulator.get_probability(state), proba)
