@@ -3,6 +3,8 @@ Main interface for simulators.
 """
 import abc
 
+from .gate import Gate
+
 
 class Simulator(abc.ABC):
     """
@@ -11,7 +13,7 @@ class Simulator(abc.ABC):
     """
 
     @abc.abstractmethod
-    def simulate_gate(self, gate, qubits):
+    def simulate_gate(self, gate: Gate):
         """
         Simulates a single gate
         """
@@ -20,8 +22,8 @@ class Simulator(abc.ABC):
         """
         Simulates a sequence of gates
         """
-        for gate, qubits in circuit:
-            self.simulate_gate(gate, qubits)
+        for gate in circuit:
+            self.simulate_gate(gate)
 
 
 class StrongSimulator(Simulator, abc.ABC):
