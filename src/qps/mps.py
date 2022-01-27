@@ -96,14 +96,12 @@ class MPS(StrongSimulator, WeakSimulator):
         for i in range(self.n):
             contracted = np.einsum("i,ikl->kl", contracted, self.matrices[i])
 
-            prob = np.linalg.norm(contracted[0]) ** 2
+            prob = np.linalg.norm(contracted[0, :]) ** 2
 
             rn = random.random()
 
             bitstring += "0" if rn < prob else "1"
-            vec = np.array([1, 0]) if rn < prob else np.array([0, 1])
-
-            contracted = np.einsum("ij,i->j", contracted, vec)
+            contracted = contracted[0, :] if rn < prob else contracted[0, :]
             contracted /= np.linalg.norm(contracted)
 
         return bitstring
