@@ -1,10 +1,10 @@
 """
 Implementation of a MPS-based quantum circuit simulator
 """
+import random
 import numpy as np
 
 from qps.gate import Gate
-
 from .simulator import StrongSimulator, WeakSimulator
 
 
@@ -63,4 +63,20 @@ class MPS(StrongSimulator, WeakSimulator):
         return abs(amplitude) ** 2
 
     def get_sample(self):
-        return "0" * self.n
+        bitstring = ""
+
+        for i in range(self.n):
+            prob = np.linalg.norm(self.matrices[i][:, 0, :]) ** 2
+
+            rn = random.random()
+
+            bitstring += "0" if rn < prob else "1"
+
+            if i < self.n - 1:
+                vec = np.array([1, 0]) if rn < prob else np.array([0, 1])
+                mat = np.einsum("ijk,j->ik", self.matrices[i], vec)
+
+                self.matrices[i + 1] = np.einsum("ik,klm->ilm", mat, self.matrices[i + 1])
+                self.matrices[i + 1] /= np.linalg.norm(self.matrices[i + 1])
+
+        return bitstring
