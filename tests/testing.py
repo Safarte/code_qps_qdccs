@@ -13,7 +13,7 @@ SIMULATORS = []
 try:
     from qps.mps import MPS
 
-    # SIMULATORS.append(MPS)
+    SIMULATORS.append(MPS)
 except ImportError:
     pass
 

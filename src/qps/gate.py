@@ -43,9 +43,12 @@ class Gate(abc.ABC):
         """
 
     @property
-    def controlled_matrix(self):
-        n = 1 << len(self.qubits)
-        return np.block([[np.eye(n), np.zeros((n, n))], [np.zeros((n, n)), self.matrix()]])
+    def full_matrix(self):
+        if self.is_controlled():
+            n = 1 << len(self.qubits)
+            return np.block([[np.eye(n), np.zeros((n, n))], [np.zeros((n, n)), self.matrix()]])
+
+        return self.matrix()
 
 
 class H(Gate):
