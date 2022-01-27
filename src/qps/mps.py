@@ -56,8 +56,13 @@ class MPS(StrongSimulator, WeakSimulator):
             # Perform SVD on matrix
             u, s, v = np.linalg.svd(gamma, full_matrices=False)
 
+            indices = s.argsort()[::-1]
+            if self.max_bound is not None:
+                # Truncate SVD matrices
+                indices = indices[: self.max_bound]
+
             # Remove non-zero singular values
-            non_zero_s = np.nonzero(s)
+            non_zero_s = np.nonzero(s[indices])
             u = u[:, non_zero_s]
             s = s[non_zero_s]
             v = v[non_zero_s, :]
