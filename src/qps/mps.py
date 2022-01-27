@@ -13,38 +13,56 @@ class MPS(StrongSimulator, WeakSimulator):
     A quantum circuit simulator based on Matrix Product State data structure.
     """
 
-    def __init__(self, nqbits: int):
+    def __init__(self, nqbits: int, max_bound=None):
         self.n = nqbits
+        self.max_bound = max_bound
 
         # Initialize the state as a list of tensors
         self.matrices = [np.array([1, 0]).reshape((1, 2, 1)) for _ in range(self.n)]
 
     def simulate_gate(self, gate: Gate):
-        idx = gate.qubits[0]
         g = gate.full_matrix
+
+        # Retrieve modified qubit's Gamma
+        idx = gate.qubits[0]
         gamma = self.matrices[idx]
 
         if gate.is_controlled():
+            # Retrieve control qubit's Gamma
             idx_c = gate.control_qubit
             gamma_c = self.matrices[idx_c]
 
+            # Store leftmost and rightmost tensor axis sizes
             alpha_prec = gamma_c.shape[0]
             alpha_next = gamma.shape[2]
+
+            # Store contracted qubit matrix dimensions
             n = max(gamma_c.size, gamma.size)
             m = min(gamma_c.size, gamma.size)
 
+            # Contract control and modified qubits
             gamma = np.einsum("ijk,klm->ijlm", gamma_c, gamma)
 
+            # Reshape gate and contracted qubits
             g = g.reshape((2, 2, 4))
             gamma = gamma.reshape((alpha_prec, 4, alpha_next))
 
+            # Apply gate to contracted qubits
             gamma = np.einsum("ijk,lmj->ilmk", gamma, g)
 
+            # Reshape tensor into matrix
             gamma = gamma.reshape((n, m))
 
+            # Perform SVD on matrix
             u, s, v = np.linalg.svd(gamma, full_matrices=False)
             u *= s
 
+            if self.max_bound is not None:
+                # Truncate SVD matrices
+                u = u[:, : self.max_bound]
+                v = v[: self.max_bound, :]
+
+            # Assign the two parts of the SVD as the new qubits' tensors
             self.matrices[idx_c] = u.reshape((alpha_prec, 2, -1))
             self.matrices[idx] = v.reshape((-1, 2, alpha_next))
 
