@@ -80,9 +80,11 @@ class MPS(StrongSimulator, WeakSimulator):
         amplitude = np.ones((1, 1))
 
         for i, b in enumerate(classical_state):
+            # Contract |0> or |1> into qubit's tensor
             vec = np.array([1, 0]) if b == "0" else np.array([0, 1])
             mat = np.einsum("ijk,j->ik", self.matrices[i], vec)
 
+            # Contract qubit's tensor into amplitude
             amplitude = np.einsum("ij,jk->ik", amplitude, mat)
 
         return abs(amplitude) ** 2
@@ -98,9 +100,11 @@ class MPS(StrongSimulator, WeakSimulator):
             bitstring += "0" if rn < prob else "1"
 
             if i < self.n - 1:
+                # Contract measured qubit into current qubit
                 vec = np.array([1, 0]) if rn < prob else np.array([0, 1])
                 mat = np.einsum("ijk,j->ik", self.matrices[i], vec)
 
+                # Contract current qubit into next one and renormalize
                 self.matrices[i + 1] = np.einsum("ik,klm->ilm", mat, self.matrices[i + 1])
                 self.matrices[i + 1] /= np.linalg.norm(self.matrices[i + 1])
 
