@@ -10,6 +10,10 @@ from .simulator import StrongSimulator, WeakSimulator
 SWAP = np.array([[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]])
 
 
+def normalize(array):
+    return array / np.linalg.norm(array)
+
+
 class MPS(StrongSimulator, WeakSimulator):
     """
     A quantum circuit simulator based on Matrix Product State data structure.
@@ -22,66 +26,84 @@ class MPS(StrongSimulator, WeakSimulator):
         # Initialize the state as a list of tensors
         self.matrices = [np.array([1, 0]).reshape((1, 2, 1)) for _ in range(self.n)]
 
-    def simulate_gate(self, gate: Gate):
-        g = gate.full_matrix
+    def apply_one_qubit_gate(self, target, gate):
+        gamma = self.matrices[target]
 
-        # Retrieve modified qubit's Gamma
-        idx = gate.qubits[0]
-        gamma = self.matrices[idx]
+        self.matrices[target] = np.einsum("ijk,jl->ilk", gamma, gate)
+
+    def apply_two_qubits_gate(self, control, target, gate):
+        # Retrieve qubits Gamma
+        gamma = self.matrices[target]
+        gamma_c = self.matrices[control]
+
+        # Store leftmost and rightmost tensor axis sizes
+        alpha_prec = gamma_c.shape[0]
+        alpha_next = gamma.shape[2]
+
+        # Store contracted qubit matrix dimensions
+        n = max(alpha_prec, alpha_next)
+        m = min(alpha_prec, alpha_next)
+
+        # Contract control and modified qubits
+        gamma = np.einsum("ijk,klm->ijlm", gamma_c, gamma)
+
+        # Reshape gate and contracted qubits
+        g = gate.reshape((2, 2, 4))
+        gamma = gamma.reshape((alpha_prec, 4, alpha_next))
+
+        # Apply gate to contracted qubits
+        gamma = np.einsum("ijk,lmj->ilmk", gamma, g)
+
+        # Reshape tensor into matrix
+        gamma = gamma.reshape((2 * n, 2 * m))
+
+        # Perform SVD on matrix
+        u, s, v = np.linalg.svd(gamma, full_matrices=False)
+
+        indices = s.argsort()[::-1]
+        if self.max_bound is not None:
+            # Truncate SVD matrices
+            indices = indices[: self.max_bound]
+
+        # Remove non-zero singular values
+        non_zero_s = np.nonzero(s[indices])
+        u = u[:, non_zero_s]
+        s = s[non_zero_s]
+        v = v[non_zero_s, :]
+
+        u *= s
+
+        if self.max_bound is not None:
+            # Truncate SVD matrices
+            u = u[:, : self.max_bound]
+            v = v[: self.max_bound, :]
+
+        # Assign the two parts of the SVD as the new qubits' tensors
+        if self.matrices[control].size >= self.matrices[target].size:
+            self.matrices[control] = u.reshape((alpha_prec, 2, -1))
+            self.matrices[target] = v.reshape((-1, 2, alpha_next))
+        else:
+            self.matrices[control] = v.reshape((alpha_prec, 2, -1))
+            self.matrices[target] = u.reshape((-1, 2, alpha_next))
+
+    def simulate_gate(self, gate: Gate):
+        control = gate.control_qubit
+        target = gate.qubits[0]
 
         if gate.is_controlled():
-            # Retrieve control qubit's Gamma
-            idx_c = gate.control_qubit
-            gamma_c = self.matrices[idx_c]
+            if target - control > 1:
+                # Apply SWAP cascades
+                for i in range(control, target - 1):
+                    self.apply_two_qubits_gate(i, i + 1, SWAP)
 
-            # Store leftmost and rightmost tensor axis sizes
-            alpha_prec = gamma_c.shape[0]
-            alpha_next = gamma.shape[2]
+                self.apply_two_qubits_gate(target - 1, target, gate.full_matrix)
 
-            # Store contracted qubit matrix dimensions
-            n = max(gamma_c.size, gamma.size)
-            m = min(gamma_c.size, gamma.size)
-
-            # Contract control and modified qubits
-            gamma = np.einsum("ijk,klm->ijlm", gamma_c, gamma)
-
-            # Reshape gate and contracted qubits
-            g = g.reshape((2, 2, 4))
-            gamma = gamma.reshape((alpha_prec, 4, alpha_next))
-
-            # Apply gate to contracted qubits
-            gamma = np.einsum("ijk,lmj->ilmk", gamma, g)
-
-            # Reshape tensor into matrix
-            gamma = gamma.reshape((n, m))
-
-            # Perform SVD on matrix
-            u, s, v = np.linalg.svd(gamma, full_matrices=False)
-
-            indices = s.argsort()[::-1]
-            if self.max_bound is not None:
-                # Truncate SVD matrices
-                indices = indices[: self.max_bound]
-
-            # Remove non-zero singular values
-            non_zero_s = np.nonzero(s[indices])
-            u = u[:, non_zero_s]
-            s = s[non_zero_s]
-            v = v[non_zero_s, :]
-
-            u *= s
-
-            if self.max_bound is not None:
-                # Truncate SVD matrices
-                u = u[:, : self.max_bound]
-                v = v[: self.max_bound, :]
-
-            # Assign the two parts of the SVD as the new qubits' tensors
-            self.matrices[idx_c] = u.reshape((alpha_prec, 2, -1))
-            self.matrices[idx] = v.reshape((-1, 2, alpha_next))
-
+                for i in range(target - 2, control - 1, -1):
+                    self.apply_two_qubits_gate(i, i + 1, SWAP)
+            else:
+                self.apply_two_qubits_gate(control, target, gate.full_matrix)
         else:
-            self.matrices[idx] = np.einsum("ijk,jl->ilk", gamma, g)
+            self.apply_one_qubit_gate(target, gate.full_matrix)
 
     def get_probability(self, classical_state):
         amplitude = np.ones((1, 1))
@@ -109,6 +131,6 @@ class MPS(StrongSimulator, WeakSimulator):
 
             bitstring += "0" if rn < prob else "1"
             contracted = contracted[0, :] if rn < prob else contracted[0, :]
-            contracted /= np.linalg.norm(contracted)
+            contracted = normalize(contracted)
 
         return bitstring
