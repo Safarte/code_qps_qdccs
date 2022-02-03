@@ -113,3 +113,21 @@ class RZ(Gate):
 
     def matrix(self):
         return np.diag([np.exp(1j * self._theta / 2), np.exp(-1j * self._theta / 2)])
+
+
+class Unitary(Gate):
+    def __init__(self, matrix, qubits):
+        if len(qubits) > 1:
+            self._is_controlled = True
+            self._matrix = matrix[2:4, 2:4]
+            super().__init__(qubits[1:], qubits[0])
+        else:
+            self._is_controlled = False
+            self._matrix = matrix
+            super().__init__(qubits)
+
+    def is_controlled(self):
+        return self._is_controlled
+
+    def matrix(self):
+        return self._matrix

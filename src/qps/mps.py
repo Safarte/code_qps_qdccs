@@ -7,6 +7,8 @@ import numpy as np
 from qps.gate import Gate
 from .simulator import StrongSimulator, WeakSimulator
 
+SWAP = np.array([[1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]])
+
 
 class MPS(StrongSimulator, WeakSimulator):
     """

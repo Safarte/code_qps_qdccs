@@ -3,7 +3,7 @@ Main interface for simulators.
 """
 import abc
 
-from .gate import Gate
+from .gate import Gate, Unitary
 
 
 class Simulator(abc.ABC):
@@ -23,7 +23,7 @@ class Simulator(abc.ABC):
         Simulates a sequence of gates
         """
         for gate in circuit:
-            self.simulate_gate(gate)
+            self.simulate_gate(Unitary(*gate))
 
 
 class StrongSimulator(Simulator, abc.ABC):

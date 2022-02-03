@@ -5,8 +5,6 @@ If I've worked correctly, it should grab the various simulators we will code and
 import pytest
 import numpy as np
 
-from qps.gate import X, Id, H, RX, RZ, CNot, CZ
-
 
 SIMULATORS = []
 
@@ -24,14 +22,6 @@ try:
     SIMULATORS.append(Direct)
 except ImportError:
     pass
-
-try:
-    from qps.tensor import TensorContraction
-
-    # SIMULATORS.append(TensorContraction)
-except ImportError:
-    pass
-
 
 HADAMARD = np.array([[1, 1], [1, -1]]) / np.sqrt(2.0)
 CNOT = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]])
@@ -61,21 +51,35 @@ def get_random_lnn_circuit(dim, depth):
     _circuit = []
     for _ in range(depth):
         for qbit in range(dim):
-            _circuit.append(RX(np.random.random_sample() * 2 * np.pi, [qbit]))
-            _circuit.append(RZ(np.random.random_sample() * 2 * np.pi, [qbit]))
-            _circuit.append(RX(np.random.random_sample() * 2 * np.pi, [qbit]))
+            _circuit.append((rotation_x(np.random.random_sample() * 2 * np.pi), [qbit]))
+            _circuit.append((rotation_z(np.random.random_sample() * 2 * np.pi), [qbit]))
+            _circuit.append((rotation_x(np.random.random_sample() * 2 * np.pi), [qbit]))
         for i in range(dim - 1):
-            _circuit.append(CZ([i + 1], i))
+            _circuit.append((CONTROLED_Z, [i, i + 1]))
     return _circuit
+
+
+def get_ghz_circuit(dim):
+    circuit = []
+    circuit.append((HADAMARD, [0]))
+    for i in range(1, dim):
+        circuit.append((CNOT, [0, i]))
+    return circuit
 
 
 CIRCUITS = []
 RESULTS = []
 NAMES = []
 
+# Some tests that only works when qubit indexes are ignored
+circuit = [(HADAMARD, [0]), (CNOT, [0, 1])]
+result = [("00", 1 / 2.0), ("11", 1 / 2.0)]
+CIRCUITS.append(circuit)
+RESULTS.append(result)
+NAMES.append("simple")
 # Some boring tests to check that the bit ordering is correct
 for nqbits in range(2, 10):
-    circuit = [X([0]), Id([nqbits - 1])]
+    circuit = [(PAULI_X, [0]), (ID, [nqbits - 1])]
 
     result = [("1" + "0" * (nqbits - 1), 1)]
     CIRCUITS.append(circuit)
@@ -84,8 +88,8 @@ for nqbits in range(2, 10):
 
 # GHZ state/Bell tests, we expect state |0...0> + |1..1> (up to normalization)
 for nqbits in range(2, 20):
-    circuit = [H([0])]
-    circuit.extend(list(CNot([i + 1], i) for i in range(nqbits - 1)))
+    circuit = [(HADAMARD, [0])]
+    circuit.extend(list((CNOT, [i, i + 1]) for i in range(nqbits - 1)))
     CIRCUITS.append(circuit)
     # We will just check these two probabilities :) it should be enough :p
     result = [("0" * nqbits, 0.5), ("1" * nqbits, 0.5)]
@@ -94,7 +98,7 @@ for nqbits in range(2, 20):
 
 # Pure uniform state
 for nqbits in range(2, 15):
-    circuit = [H([i]) for i in range(nqbits)]
+    circuit = [(HADAMARD, [i]) for i in range(nqbits)]
     CIRCUITS.append(circuit)
     result = [
         (
@@ -106,6 +110,12 @@ for nqbits in range(2, 15):
     RESULTS.append(result)
     NAMES.append(f"uniform_distrib_n={nqbits}")
 
+# GHZ but with non consecutive gates
+for nqbits in range(2, 15):
+    CIRCUITS.append(get_ghz_circuit(nqbits))
+    NAMES.append(f"ghz_non_consec_{nqbits}")
+    RESULTS.append([("1" * nqbits, 0.5), ("0" * nqbits, 0.5)])
+
 
 @pytest.mark.parametrize("data", zip(CIRCUITS, RESULTS), ids=NAMES)
 @pytest.mark.parametrize("simulator_class", SIMULATORS)
@@ -115,9 +125,22 @@ def test_strong_simulation(simulator_class: type, data):
     and compares the result to an expected vector
     """
     _circuit, expected_results = data
-    _nqbits = max(max(gate.qubits) for gate in _circuit) + 1
+    _nqbits = max(max(qbits) for _, qbits in _circuit) + 1
     simulator = simulator_class(_nqbits)
     simulator.simulate_circuit(_circuit)
     for state, proba in expected_results:
-        print(state, proba)
         assert np.isclose(simulator.get_probability(state), proba)
+
+
+@pytest.mark.parametrize("nqbits", range(2, 10))
+@pytest.mark.parametrize("simulator_class", SIMULATORS)
+def test_weak_simulation_ghz(simulator_class, nqbits):
+    """
+    Checks that sampling a Bell pair does only yield correct samples
+    """
+    circuit = get_ghz_circuit(nqbits)
+    simulator = simulator_class(nqbits)
+    simulator.simulate_circuit(circuit)
+    samples = [simulator.get_sample() for _ in range(23)]
+    for sample in samples:
+        assert all(sample) or not any(sample)
