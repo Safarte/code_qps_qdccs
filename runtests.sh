@@ -1,2 +1,2 @@
 python setup.py install
-python -m pytest tests/testing.py -v
+python -m pytest tests/* -v
