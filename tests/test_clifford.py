@@ -33,3 +33,33 @@ def test_ghz(nbits):
         tab.cnot(i, i + 1)
     res = [tab.measure(i) for i in range(nbits)]
     assert all(res) or not any(res)
+
+
+def test_teleport():
+    tab = Tableau(3)
+
+    # Alice qubit to 1
+    tab.hadamard(0)
+    tab.phase(0)
+    tab.phase(0)
+    tab.hadamard(0)
+
+    # Teleportation
+    tab.hadamard(1)
+    tab.cnot(1, 2)
+    tab.cnot(0, 1)
+    tab.hadamard(0)
+
+    if tab.measure(1):
+        # X
+        tab.hadamard(2)
+        tab.phase(2)
+        tab.phase(2)
+        tab.hadamard(2)
+
+    if tab.measure(0):
+        # Z
+        tab.phase(2)
+        tab.phase(2)
+
+    assert tab.measure(2) == 1
